@@ -26,15 +26,17 @@
     history: []           // [{ id, title, level }]
   };
 
-  // The page source. Static library today; swap to an LLM client tomorrow.
-  const provider = Providers.fromQuery({ onStep: oracleStep });
+  // The page source is chosen at the gateway (or pinned via URL). Static
+  // library today; the same seam accepts a real LLM client tomorrow.
+  let provider = null;
   let renderToken = 0;    // guards against races (fast restart during async gen)
+  function setProvider(kind) { provider = Providers.build(kind, { onStep: oracleStep }); }
 
   /* ------------------------------------------------------------------ util */
   function levelName() { return LEVELS[state.levelIdx]; }
 
   function setHud() {
-    if (state.phase === "intro") { hudEl.hidden = true; return; }
+    if (state.phase === "intro" || state.phase === "gateway") { hudEl.hidden = true; return; }
     hudEl.hidden = false;
     const shown = state.phase === "outro" ? QUEST.stages.length : state.stage + 1;
     hudPage.textContent = shown + " / " + QUEST.stages.length;
@@ -64,6 +66,86 @@
       (sub ? '<span class="c-sub">' + sub + "</span>" : "") + "</span>";
     btn.addEventListener("click", onClick);
     return btn;
+  }
+
+  /* --------------------------------------------------------------- gateway */
+  // First screen: choose WHO writes each room. Three doors, matching the three
+  // glowing portals in the hero art — the pre-authored library (red {}), the
+  // simulated oracle (green <>), and a real model you bring a key for (blue />).
+  function renderGateway() {
+    state.phase = "gateway";
+    renderToken++;
+    setHud();
+    setProgress();
+
+    const wrap = document.createElement("div");
+    wrap.className = "gateway";
+    wrap.innerHTML =
+      '<figure class="gateway-hero">' +
+        '<img src="media/gateway-hero.jpg" width="1200" height="676" ' +
+        'alt="Choose Your Own Codeventure: a hooded coder reads a glowing codebook before three runic dungeon doors." />' +
+      "</figure>" +
+      '<p class="eyebrow">Before you enter</p>' +
+      "<h2>Three doors, one quest</h2>" +
+      '<p class="lead">You&rsquo;ll build the same WinUI&nbsp;3 &ldquo;hello&rdquo; app whichever way you go. ' +
+      "The only difference is <em>who writes each room</em> as you reach it.</p>";
+
+    const doors = document.createElement("div");
+    doors.className = "doors";
+
+    doors.appendChild(gateDoor({
+      cls: "door-static", kind: "static", rune: "{&nbsp;}", icon: "&#128220;",
+      title: "The Library",
+      tag: "Pre-written &middot; instant &middot; always correct",
+      body: "Every room is authored ahead of time and code-verified. Turn the pages and the book re-routes to your level. Works offline, never breaks.",
+      cta: "Enter the Library"
+    }));
+
+    doors.appendChild(gateDoor({
+      cls: "door-ai", kind: "mock", rune: "&lt;&#8202;&gt;", icon: "&#128302;",
+      title: "The Oracle",
+      tag: "Generated on demand &middot; no key needed",
+      body: "Watch the real generate-and-verify pipeline stream, room by room, and recover when a build fails &mdash; the safe way to demo the idea.",
+      cta: "Summon the Oracle",
+      note: "The pipeline is real; the model call is simulated, so the code always stays correct."
+    }));
+
+    doors.appendChild(gateDoor({
+      cls: "door-live", kind: "llm", rune: "/&#8202;&gt;", icon: "&#128300;",
+      title: "The Living Oracle",
+      tag: "Real model &middot; bring your own key",
+      body: "The same pipeline, but a live OpenAI-compatible model actually writes each room. Grounded on the verified pages, validated, with a library fallback.",
+      cta: "Wake the Living Oracle",
+      note: "Prompts for an API key, kept only in this browser. Falls back to the library on any error."
+    }));
+
+    wrap.appendChild(doors);
+    stageEl.replaceChildren(wrap);
+    scrollTop();
+  }
+
+  function gateDoor(o) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "door " + o.cls;
+    btn.innerHTML =
+      '<span class="door-rune">' + o.rune + "</span>" +
+      '<span class="door-icon">' + o.icon + "</span>" +
+      '<span class="door-title">' + o.title + "</span>" +
+      '<span class="door-tag">' + o.tag + "</span>" +
+      '<span class="door-body">' + o.body + "</span>" +
+      (o.note ? '<span class="door-note">' + o.note + "</span>" : "") +
+      '<span class="door-cta">' + o.cta + " &#10148;</span>";
+    btn.addEventListener("click", () => chooseGate(o.kind));
+    return btn;
+  }
+
+  function chooseGate(kind) {
+    setProvider(kind);
+    // reflect the choice in the URL so it's shareable and reload-safe
+    const url = kind === "mock" ? "?ai=1" : kind === "llm" ? "?llm=1" : location.pathname;
+    history.replaceState({}, "", url);
+    renderIntro();
   }
 
   /* ----------------------------------------------------------------- intro */
@@ -119,6 +201,7 @@
 
   async function renderStage() {
     state.phase = "stage";
+    if (!provider) setProvider("static");   // safety net
     const stage = QUEST.stages[state.stage];
 
     // record (or update) this room in the history
@@ -312,9 +395,11 @@
   function start() {
     state.levelIdx = 1;
     state.stage = -1;
-    state.phase = "intro";
+    state.phase = "gateway";
     state.history = [];
-    renderIntro();
+    const pinned = Providers.queryChoice();   // ?ai=1 / ?static=1 skip the gateway
+    if (pinned) { setProvider(pinned); renderIntro(); }
+    else { provider = null; renderGateway(); }
   }
 
   restartEl.addEventListener("click", (e) => { e.preventDefault(); start(); });
