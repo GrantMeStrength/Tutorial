@@ -26,6 +26,10 @@
     history: []           // [{ id, title, level }]
   };
 
+  // The page source. Static library today; swap to an LLM client tomorrow.
+  const provider = Providers.fromQuery({ onStep: oracleStep });
+  let renderToken = 0;    // guards against races (fast restart during async gen)
+
   /* ------------------------------------------------------------------ util */
   function levelName() { return LEVELS[state.levelIdx]; }
 
@@ -65,6 +69,7 @@
   /* ----------------------------------------------------------------- intro */
   function renderIntro() {
     state.phase = "intro";
+    renderToken++;          // cancel any in-flight async room render
     setHud();
     setProgress();
 
@@ -99,10 +104,22 @@
     renderStage();
   }
 
-  function renderStage() {
+  function buildSpec() {
+    const stage = QUEST.stages[state.stage];
+    return {
+      stageIndex: state.stage,
+      stage: stage,
+      level: levelName(),
+      history: state.history.slice(),
+      // In a real system this carries the files built so far, so the
+      // generator can emit a coherent diff instead of a fresh page.
+      projectState: { room: state.stage, note: "files-so-far live here" }
+    };
+  }
+
+  async function renderStage() {
     state.phase = "stage";
     const stage = QUEST.stages[state.stage];
-    const variant = stage.variants[levelName()];
 
     // record (or update) this room in the history
     const existing = state.history[state.stage];
@@ -112,20 +129,83 @@
     setHud();
     setProgress();
 
+    const spec = buildSpec();
+    const token = ++renderToken;
+
+    // Async providers (the LLM) show a live generation console first.
+    if (!provider.synchronous) renderGenerating(spec);
+
+    let page;
+    try {
+      page = await provider.getRoom(spec);
+    } catch (err) {
+      page = fallbackPage(spec);
+    }
+    if (token !== renderToken) return; // a newer render superseded this one
+    renderRoomPage(page);
+  }
+
+  function renderRoomPage(page) {
     const wrap = document.createElement("div");
     wrap.innerHTML =
-      '<p class="eyebrow">Room ' + (state.stage + 1) + " &middot; " + LEVEL_LABEL[levelName()] + " path</p>" +
-      "<h2>" + stage.title + "</h2>" +
-      variant.html;
-
-    wrap.appendChild(renderCheckpoint(stage, variant));
+      '<p class="eyebrow">' + page.eyebrow + "</p>" +
+      "<h2>" + page.title + "</h2>" +
+      (page.source && page.source !== "library" ? provenance(page) : "") +
+      page.html;
+    wrap.appendChild(renderCheckpoint(page.checkpoint));
     stageEl.replaceChildren(wrap);
     scrollTop();
   }
 
+  // Small provenance pill so the audience can see WHERE the page came from.
+  function provenance(page) {
+    const gen = page.source === "generated";
+    return '<div class="provenance ' + (gen ? "gen" : "fb") + '">' +
+      '<span class="prov-icon">' + (gen ? "&#9889;" : "&#8618;") + "</span>" +
+      (gen ? "Generated on the fly" : "Library fallback") +
+      (page.verified ? '<span class="prov-ok">&#10003; code verified</span>' : "") +
+      "</div>";
+  }
+
+  // The "oracle" console: a live log of the generation + validation pipeline.
+  function renderGenerating(spec) {
+    const wrap = document.createElement("div");
+    wrap.className = "oracle";
+    wrap.innerHTML =
+      '<p class="eyebrow">Room ' + (spec.stageIndex + 1) + " &middot; " + LEVEL_LABEL[spec.level] + " path</p>" +
+      '<h2 class="oracle-title"><span class="orb"></span>Consulting the oracle&hellip;</h2>' +
+      '<p class="oracle-sub">Generating this room for the <strong>' + LEVEL_LABEL[spec.level] +
+      "</strong> path, then verifying the code before you ever see it.</p>" +
+      '<ul class="oracle-log" id="oracle-log"></ul>';
+    stageEl.replaceChildren(wrap);
+    scrollTop();
+  }
+
+  function oracleStep(msg) {
+    const log = document.getElementById("oracle-log");
+    if (!log) return;
+    const li = document.createElement("li");
+    li.innerHTML = msg;
+    log.appendChild(li);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  // Last-ditch page if a provider throws outright.
+  function fallbackPage(spec) {
+    const v = spec.stage.variants.standard || spec.stage.variants[spec.level];
+    return {
+      eyebrow: Providers.roomEyebrow(spec),
+      title: spec.stage.title,
+      html: v.html,
+      checkpoint: v.checkpoint,
+      source: "fallback",
+      verified: true
+    };
+  }
+
   /* ------------------------------------------------------------ checkpoint */
-  function renderCheckpoint(stage, variant) {
-    const cp = variant.checkpoint || { q: "How did that room feel?", hint: "" };
+  function renderCheckpoint(cp) {
+    cp = cp || { q: "How did that room feel?", hint: "" };
     const box = document.createElement("div");
     box.className = "checkpoint";
     box.innerHTML =
@@ -189,6 +269,7 @@
   /* ----------------------------------------------------------------- outro */
   function renderOutro() {
     state.phase = "outro";
+    renderToken++;          // cancel any in-flight async room render
     setHud();
     setProgress();
 

@@ -260,7 +260,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
             <pre>&lt;TextBlock Text="{x:Bind ViewModel.Greeting, Mode=OneWay}" FontSize="20" /&gt;</pre>
             <p>Point your Click handler at the data instead of the control:</p>
             <pre>ViewModel.Greeting = $"Hello, {NameInput.Text}!";</pre>
-            <p>Run it. Same result &mdash; but now the UI is watching the data. <strong>Quest complete!</strong></p>
+            <p>Run it. Same result &mdash; but now the UI is watching the data. <strong>Boss down!</strong> One treasure room remains.</p>
             <div class="note"><span class="note-title">What just happened</span>
             <code class="inline">INotifyPropertyChanged</code> is the "announce a change" contract.
             <code class="inline">Mode=OneWay</code> means data → screen. Change the property anywhere and the label follows.</div>
@@ -292,7 +292,7 @@ public MainViewModel ViewModel { get; } = new();
 
 // Click handler
 ViewModel.Greeting = $"Hello, {NameInput.Text}!";</pre>
-            <p>Run &mdash; the label now tracks the data. That's the MVVM seed. <strong>Quest complete.</strong></p>
+            <p>Run &mdash; the label now tracks the data. That's the MVVM seed. <strong>Boss down</strong> &mdash; claim your reward next room.</p>
           `,
           checkpoint: { q: "One-way binding working?", hint: "" }
         },
@@ -306,9 +306,71 @@ ViewModel.Greeting = $"Hello, {NameInput.Text}!";</pre>
             (<code class="inline">Command="{x:Bind ViewModel.GreetCommand}"</code>) and two-way bind
             <code class="inline">NameInput</code> to a view-model property. Now the code-behind is empty &mdash;
             pure MVVM.</div>
-            <p><strong>Quest complete.</strong></p>
+            <p><strong>Boss down.</strong> A treasure room awaits.</p>
           `,
           checkpoint: { q: "MVVM refactor landed?", hint: "" }
+        }
+      }
+    },
+
+    /* ---------------------------------------------------------------- 6 */
+    {
+      id: "style",
+      title: "Room VI — The Treasure Vault (Style &amp; Theme)",
+      concept: "Style resources and theme brushes",
+      variants: {
+        gentle: {
+          html: `
+            <p>Your app <em>works</em> &mdash; now make it look the part. Rather than scattering
+            <code class="inline">FontSize</code> and colours across every control, we define a reusable
+            <strong>Style</strong> once and point controls at it. Think of it as a spell you cast many times.</p>
+            <p>Add a resource inside your panel:</p>
+            <pre>&lt;StackPanel.Resources&gt;
+    &lt;Style x:Key="GreetingText" TargetType="TextBlock"&gt;
+        &lt;Setter Property="FontSize" Value="24" /&gt;
+        &lt;Setter Property="Foreground" Value="{ThemeResource AccentTextFillColorPrimaryBrush}" /&gt;
+    &lt;/Style&gt;
+&lt;/StackPanel.Resources&gt;</pre>
+            <p>Then apply it to the greeting:</p>
+            <pre>&lt;TextBlock Text="{x:Bind ViewModel.Greeting, Mode=OneWay}"
+           Style="{StaticResource GreetingText}" /&gt;</pre>
+            <p>Run it. The greeting picks up your system <em>accent</em> colour &mdash; and if you switch Windows
+            between light and dark, it stays readable automatically.</p>
+            <div class="note"><span class="note-title">Why ThemeResource?</span>
+            <code class="inline">{ThemeResource ...}</code> pulls a colour from Windows' current theme, so light/dark
+            "just works" &mdash; the same system-theme rule good LOB apps follow.</div>
+          `,
+          checkpoint: { q: "Greeting restyled with the accent colour?", hint: "Last room — a victory lap." }
+        },
+        standard: {
+          html: `
+            <p>Factor styling into a reusable <strong>Style</strong> resource and lean on
+            <strong>theme brushes</strong> instead of hard-coded colours.</p>
+            <pre>&lt;StackPanel.Resources&gt;
+    &lt;Style x:Key="GreetingText" TargetType="TextBlock"&gt;
+        &lt;Setter Property="FontSize" Value="24" /&gt;
+        &lt;Setter Property="Foreground" Value="{ThemeResource AccentTextFillColorPrimaryBrush}" /&gt;
+    &lt;/Style&gt;
+&lt;/StackPanel.Resources&gt;
+
+&lt;TextBlock Text="{x:Bind ViewModel.Greeting, Mode=OneWay}"
+           Style="{StaticResource GreetingText}" /&gt;</pre>
+            <p>Run, then toggle Windows light/dark &mdash; the accent-based text adapts without extra code.</p>
+          `,
+          checkpoint: { q: "Style resource applied and theme-aware?", hint: "" }
+        },
+        challenge: {
+          html: `
+            <p>Promote the greeting's look to a keyed <code class="inline">Style</code> using
+            <code class="inline">{ThemeResource}</code> brushes, applied via
+            <code class="inline">Style="{StaticResource ...}"</code>.</p>
+            <div class="bonus"><span class="note-title">Treasure bonus</span>
+            Move the <code class="inline">Style</code> up to <code class="inline">App.xaml</code>'s
+            <code class="inline">Application.Resources</code> so every window shares it, then add a
+            <code class="inline">ResourceDictionary.ThemeDictionaries</code> block to override a brush per theme.
+            That's the seed of an app-wide design system.</div>
+          `,
+          checkpoint: { q: "App-wide, theme-aware styling in place?", hint: "" }
         }
       }
     }
@@ -318,8 +380,8 @@ ViewModel.Greeting = $"Hello, {NameInput.Text}!";</pre>
     eyebrow: "Victory",
     title: "You cleared the dungeon",
     html: `
-      <p class="lead">You built a real WinUI&nbsp;3 app: a window, controls, an event, and data binding &mdash;
-      the spine of every desktop app you'll write next.</p>
+      <p class="lead">You built a real WinUI&nbsp;3 app: a window, controls, an event, data binding, and a
+      themed coat of paint &mdash; the spine of every desktop app you'll write next.</p>
       <p>But here's the point of the demo: <strong>the book adapted to you.</strong> Two readers finishing this
       quest didn't read the same pages. Here's the path <em>you</em> took:</p>
     `
