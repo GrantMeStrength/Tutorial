@@ -40,9 +40,27 @@ static site (and, later, to publish as guaranteed-correct tutorials).
 | Adapts as you go | Check-ins that raise/lower depth per room |
 | No risky code execution | Pages are pre-verified; engine only selects |
 | "Reads you" | Path recap at the end |
-| Future: dynamic/hosted | The **PageProvider seam** — swap the selector for an LLM (`?ai=1`) |
+| Future: dynamic/hosted | The **PageProvider seam** — swap the selector for an LLM (`?ai=1`, or a real model with `?llm=1`) |
 
-## Two tiers, one engine
+## Pick your path — the gateway
+
+The site opens on a **gateway**: one choice that decides *who writes each room*
+as you reach it. The three runic doors map straight to the three providers
+below.
+
+![The opening gateway: a hooded coder reading a glowing codebook before three runic dungeon doors — Library, Oracle, and Living Oracle.](media/gateway-hero.jpg)
+
+- **The Library** `{ }` — the static tier. Pre-written, instant, always correct.
+- **The Oracle** `< >` — the mock tier. The real generate-and-verify pipeline,
+  streamed live; the model call is simulated so it needs **no key** and can't
+  go wrong. The safe way to demo the idea.
+- **The Living Oracle** `/ >` — the **real** tier. A live OpenAI-compatible
+  model actually writes each room (bring your own key).
+
+A bare URL shows the gateway; `?static=1`, `?ai=1`, `?llm=1`, or `?key=…`
+skip it and pin a path (so links are shareable and reload-safe).
+
+## Three tiers, one engine
 
 The engine never asks *"what's the HTML for this room?"* — it asks a
 **provider**:
@@ -51,21 +69,50 @@ The engine never asks *"what's the HTML for this room?"* — it asks a
 provider.getRoom(spec) → Promise<Page>
 ```
 
-Same call, two implementations. Swapping them is the whole difference between a
-static tutorial and an AI-generated one — the engine doesn't change.
+Same call, three implementations. Swapping them is the whole difference between
+a static tutorial and an AI-generated one — the engine doesn't change.
 
-- **Static tier** (default) — `StaticPageProvider` returns a pre-authored,
-  verified page instantly. This is what ships today.
-- **Dynamic tier** (`?ai=1`) — `MockLLMPageProvider` runs the *real shape* of a
+- **Static tier** — `StaticPageProvider` returns a pre-authored, verified page
+  instantly. This is what ships today. *(The Library door · default.)*
+- **Mock tier** (`?ai=1`) — `MockLLMPageProvider` runs the *real shape* of a
   generation pipeline and streams each step to an on-screen **oracle** console:
   build a GenSpec → retrieve grounded snippets → generate under a JSON schema →
   **validate the emitted code (`dotnet build`)** → repair-or-fall-back. Only the
   model call is stubbed (it re-uses the verified body), so the demo code stays
   correct while the *seam* is real. Add `&fail=1` to force the build-failure →
-  repair loop.
+  repair loop. *(The Oracle door · no key.)*
+- **Live tier** (`?llm=1`) — `LLMPageProvider` calls a **real** OpenAI-compatible
+  endpoint. It grounds the prompt on the verified library page, requests
+  **constrained JSON**, then *assembles and escapes the HTML itself* so the
+  model can never break the page, statically validates the result, and **falls
+  back to the library** on any network / parse / validation error. *(The Living
+  Oracle door · bring your own key.)*
 
 Rendered pages carry a small **provenance pill** so you can see where each page
 came from — *library*, *generated on the fly*, or *fallback*.
+
+### Using a real model (the Living Oracle)
+
+`LLMPageProvider` works with any OpenAI-compatible chat endpoint — OpenAI, Azure
+OpenAI, Groq, Together, GitHub Models, or a local `llama.cpp` server.
+
+```bash
+# key via query string (kept in this browser's localStorage; never committed)
+http://127.0.0.1:8777/?llm=1&key=sk-...&model=gpt-4o-mini
+
+# override the endpoint (e.g. a proxy, or a local server)
+http://127.0.0.1:8777/?llm=1&endpoint=http://localhost:1234/v1/chat/completions&model=local
+```
+
+The key can also come from a one-time `prompt()` or `localStorage.cyoa_llm_key`.
+
+> ⚠️ **Security:** this is a static, client-side site, so any key you put in the
+> browser is visible to whoever uses that browser (and, on a public deploy, is
+> only as private as the machine). Use the Living Oracle **locally with your own
+> key**. To demo a real model on a public site, put the key behind a tiny proxy
+> (Cloudflare Worker / Azure Function / GitHub Models endpoint) and point
+> `?endpoint=` at it — the browser calls your proxy, the proxy holds the key.
+> For a public, no-key demo, use **The Oracle** (`?ai=1`).
 
 ![The oracle console streaming the generation and validation pipeline for a room on the Standard path.](media/06-oracle.png)
 
@@ -83,8 +130,8 @@ came from — *library*, *generated on the fly*, or *fallback*.
 | `index.html` | Shell: masthead, parchment stage, footer |
 | `styles.css` | Dungeon-gamebook theme (+ oracle console & provenance pill) |
 | `content.js` | The content library (stages × depth variants) — **edit this to add rooms** |
-| `provider.js` | The **PageProvider seam**: static library today, LLM tomorrow |
-| `engine.js` | The "dungeon master": state, selection, check-ins, recap |
+| `provider.js` | The **PageProvider seam**: static library, mock oracle, and a real OpenAI-compatible client |
+| `engine.js` | The "dungeon master": gateway, state, selection, check-ins, recap |
 
 ## Run locally
 
@@ -92,9 +139,11 @@ No dependencies. Serve the folder:
 
 ```bash
 python3 -m http.server 8777
-# open http://127.0.0.1:8777/            → static tier
-# open http://127.0.0.1:8777/?ai=1       → dynamic tier (the oracle)
-# open http://127.0.0.1:8777/?ai=1&fail=1 → force the build-fail → repair loop
+# open http://127.0.0.1:8777/               → the gateway (pick a path)
+# open http://127.0.0.1:8777/?static=1      → Library tier (static)
+# open http://127.0.0.1:8777/?ai=1          → Oracle tier (mock; no key)
+# open http://127.0.0.1:8777/?ai=1&fail=1   → force the build-fail → repair loop
+# open http://127.0.0.1:8777/?llm=1&key=sk-… → Living Oracle (real model)
 ```
 
 ## Add a room
