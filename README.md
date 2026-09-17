@@ -7,6 +7,11 @@ you're doing.
 
 **[▶ Live demo](https://grantmestrength.github.io/Tutorial/)** (GitHub Pages)
 
+![The gamebook adapting in real time: entering a room, a check-in raising the difficulty, a re-route to a gentler path, and the final recap of the path taken.](media/demo.gif)
+
+Two readers finish the same quest having read different books — the check-in
+after each room quietly steepens, gentles, or re-explains the next page.
+
 ## The idea
 
 Static tutorials are one-size-fits-none: beginners get lost, experts get bored.
@@ -35,15 +40,50 @@ static site (and, later, to publish as guaranteed-correct tutorials).
 | Adapts as you go | Check-ins that raise/lower depth per room |
 | No risky code execution | Pages are pre-verified; engine only selects |
 | "Reads you" | Path recap at the end |
-| Future: dynamic/hosted | Same content model, swap the selector for an LLM |
+| Future: dynamic/hosted | The **PageProvider seam** — swap the selector for an LLM (`?ai=1`) |
+
+## Two tiers, one engine
+
+The engine never asks *"what's the HTML for this room?"* — it asks a
+**provider**:
+
+```js
+provider.getRoom(spec) → Promise<Page>
+```
+
+Same call, two implementations. Swapping them is the whole difference between a
+static tutorial and an AI-generated one — the engine doesn't change.
+
+- **Static tier** (default) — `StaticPageProvider` returns a pre-authored,
+  verified page instantly. This is what ships today.
+- **Dynamic tier** (`?ai=1`) — `MockLLMPageProvider` runs the *real shape* of a
+  generation pipeline and streams each step to an on-screen **oracle** console:
+  build a GenSpec → retrieve grounded snippets → generate under a JSON schema →
+  **validate the emitted code (`dotnet build`)** → repair-or-fall-back. Only the
+  model call is stubbed (it re-uses the verified body), so the demo code stays
+  correct while the *seam* is real. Add `&fail=1` to force the build-failure →
+  repair loop.
+
+Rendered pages carry a small **provenance pill** so you can see where each page
+came from — *library*, *generated on the fly*, or *fallback*.
+
+![The oracle console streaming the generation and validation pipeline for a room on the Standard path.](media/06-oracle.png)
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Opening level-set page with three doors: Scenic, Standard, Expert.](media/01-intro.png) | ![A room on the Standard path with a code sample and a check-in.](media/02-room-standard.png) |
+| ![A room re-routed to the gentler Scenic path after "Lost me."](media/04-reroute-scenic.png) | ![A generated room showing the "Generated on the fly · code verified" provenance pill.](media/07-generated.png) |
 
 ## Files
 
 | File | Role |
 |---|---|
 | `index.html` | Shell: masthead, parchment stage, footer |
-| `styles.css` | Dungeon-gamebook theme |
+| `styles.css` | Dungeon-gamebook theme (+ oracle console & provenance pill) |
 | `content.js` | The content library (stages × depth variants) — **edit this to add rooms** |
+| `provider.js` | The **PageProvider seam**: static library today, LLM tomorrow |
 | `engine.js` | The "dungeon master": state, selection, check-ins, recap |
 
 ## Run locally
@@ -52,7 +92,9 @@ No dependencies. Serve the folder:
 
 ```bash
 python3 -m http.server 8777
-# open http://127.0.0.1:8777/
+# open http://127.0.0.1:8777/            → static tier
+# open http://127.0.0.1:8777/?ai=1       → dynamic tier (the oracle)
+# open http://127.0.0.1:8777/?ai=1&fail=1 → force the build-fail → repair loop
 ```
 
 ## Add a room
