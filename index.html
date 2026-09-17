@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Choose Your Own Codeventure — Hello, WinUI 3</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="scanlines" aria-hidden="true"></div>
+
+  <header class="masthead">
+    <div class="crest" aria-hidden="true">&#9670;</div>
+    <div class="titles">
+      <h1>Choose Your Own <span class="accent">Codeventure</span></h1>
+      <p class="tagline">A tutorial that reads you &middot; Quest I: <em>Hello, WinUI&nbsp;3</em></p>
+    </div>
+    <div class="hud" id="hud" hidden>
+      <div class="hud-item"><span class="hud-label">Page</span><span id="hud-page">0</span></div>
+      <div class="hud-item"><span class="hud-label">Path</span><span id="hud-level" class="level-badge">Standard</span></div>
+    </div>
+  </header>
+
+  <main id="stage" class="parchment" aria-live="polite">
+    <!-- Rendered by engine.js -->
+  </main>
+
+  <footer class="footer">
+    <div class="progress-track" id="progress" aria-hidden="true"></div>
+    <p class="fine">Static pages &middot; no server &middot; the branch you take depends on your answers. <a href="#" id="restart">Start over</a></p>
+  </footer>
+
+  <script src="content.js"></script>
+  <script src="engine.js"></script>
+</body>
+</html>
